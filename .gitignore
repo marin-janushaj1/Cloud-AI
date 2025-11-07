@@ -1,0 +1,30 @@
+# OS / Editor
+.DS_Store
+.vscode/
+.ipynb_checkpoints/
+
+# Python / venv / cache
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Data & models (keep raw downloads out of git)
+data/raw/*
+data/clean/*
+
+# Allow small sample files (optional)
+!data/raw/README.md
+!data/clean/README.md
+
+# Model artifacts
+*.pkl
+*.joblib
+*.onnx
+
+# Streamlit cache
+.streamlit/
+
+# Jupyter
+.notebook_dir/
