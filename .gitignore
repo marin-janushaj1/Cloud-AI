@@ -1,30 +1,41 @@
-# OS / Editor
+# macOS / editors / Jupyter
 .DS_Store
 .vscode/
 .ipynb_checkpoints/
+.notebook_dir/
 
-# Python / venv / cache
-venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*.so
 
-# Data & models (keep raw downloads out of git)
-data/raw/*
-data/clean/*
+# Virtual environments
+venv/
+venv311/
+.venv/
 
-# Allow small sample files (optional)
-!data/raw/README.md
-!data/clean/README.md
-
-# Model artifacts
-*.pkl
-*.joblib
-*.onnx
+# Logs
+*.log
 
 # Streamlit cache
 .streamlit/
 
-# Jupyter
-.notebook_dir/
+# --- Data: ignore heavy data by default ---
+data/raw/**
+data/clean/**
+
+# Keep readmes (so folders exist in Git)
+!data/raw/README.md
+!data/clean/README.md
+
+# Optional: keep tiny samples (create these folders for small demo files)
+!data/raw/samples/**
+!data/clean/samples/**
+
+# Model artifacts (ignored by default)
+*.pkl
+*.joblib
+*.onnx
+
+# OPTIONAL: keep a specific small model (uncomment if needed and <100MB)
+#!data/clean/electricity_model.pkl
