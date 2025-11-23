@@ -39,3 +39,19 @@ data/clean/**
 
 # OPTIONAL: keep a specific small model (uncomment if needed and <100MB)
 #!data/clean/electricity_model.pkl
+
+# AWS SageMaker artifacts
+*.tar.gz
+xgboost-model
+model.tar.gz
+train.csv
+test.csv
+sagemaker_train_full.csv
+sagemaker_test_full.csv
+
+# Model comparison exports (optional - can commit these if small)
+# model_comparison_results.csv
+# all_models_detailed.csv
+
+# Parquet files (can be very large)
+*.parquet

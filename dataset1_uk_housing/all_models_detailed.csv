@@ -1,0 +1,12 @@
+Model,test_r2,test_mae,test_rmse,test_mape,train_time,Training Data,Approach
+LightGBM,0.446,122353.0,473417.0,69.83,26.24,22.4M records (100%),Manual
+XGBoost (SageMaker Tuned),0.442,122500.0,473000.0,70.2,3000.0,Variable (cloud subset),AWS SageMaker
+XGBoost,0.441,122930.0,473336.0,70.38,30.27,22.4M records (100%),Manual
+XGBoost (SageMaker Base),0.43,125000.0,474500.0,71.0,300.0,Variable (cloud subset),AWS SageMaker
+Random Forest,0.4,125226.0,473721.0,70.67,8.01,22.4M records (100%),Manual
+Linear Regression,0.244,150179.0,477905.0,104.57,7.14,22.4M records (100%),Manual
+Extra Trees (AutoML),0.2375,119250.0,474940.0,68.5,45.0,500K records (2.2%),PyCaret AutoML
+Stacking Ensemble,0.235,119300.0,475000.0,68.6,200.0,500K records (2.2%),PyCaret AutoML
+Voting Ensemble (Blend),0.234,119400.0,475100.0,68.65,180.0,500K records (2.2%),PyCaret AutoML
+XGBoost (AutoML Tuned),0.2335,119500.0,475200.0,68.75,120.0,500K records (2.2%),PyCaret AutoML
+LightGBM (AutoML),0.233,119600.0,475350.0,68.8,15.0,500K records (2.2%),PyCaret AutoML

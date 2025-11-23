@@ -1,0 +1,4 @@
+Model,test_r2,test_mae,test_rmse,test_mape,train_time,Training Data,Approach
+LightGBM,0.446,122353.0,473417.0,69.83,26.24,22.4M records (100%),Manual
+XGBoost (SageMaker Tuned),0.442,122500.0,473000.0,70.2,3000.0,Variable (cloud subset),AWS SageMaker
+Extra Trees (AutoML),0.2375,119250.0,474940.0,68.5,45.0,500K records (2.2%),PyCaret AutoML
