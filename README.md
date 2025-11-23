@@ -1,9 +1,9 @@
 # Team Yunus — Cloud AI (Machine Learning Project)
 
 **Team Members:**
-- Marin Janushaj
-- Yunus Eren Ertaş
-- Alexandros Gkiorgkinis
+- **Marin Janushaj** - Dataset 1: UK Housing Price Prediction
+- **Yunus Eren Ertaş** - Dataset 2: UK Electricity Consumption Analysis
+- **Alexandros Gkiorgkinis** - Deployment, Frontend & Backend
 
 **Course:** Cloud & AI
 **Academic Year:** 2025
@@ -11,9 +11,14 @@
 
 ---
 
-## 🏡 Project 1: UK Housing Price Prediction
+## 📋 Project Overview
 
-**An end-to-end machine learning project predicting UK house prices from 22.4M+ transactions (1995-2017)**
+This repository contains **two comprehensive machine learning projects** demonstrating end-to-end ML workflows from data acquisition to production deployment.
+
+### 🏡 Dataset 1: UK Housing Price Prediction
+**Lead:** Marin Janushaj
+
+An end-to-end machine learning project predicting UK house prices from 22.4M+ transactions (1995-2017)
 
 ### 🎯 Project Overview
 
@@ -41,6 +46,18 @@ This project demonstrates the complete machine learning workflow from data acqui
 - Fast training and inference
 - Superior generalization to test set
 
+### ⚡ Dataset 2: UK Electricity Consumption Analysis
+**Lead:** Yunus Eren Ertaş
+
+Analysis and prediction of UK electricity consumption patterns, exploring temporal trends, regional variations, and forecasting future demand.
+
+- **Dataset:** UK electricity consumption data
+- **Goal:** Predict electricity demand and analyze consumption patterns
+- **Approaches:** Time series analysis, regression models, and forecasting techniques
+- **Key Features:** Temporal patterns, regional analysis, demand forecasting
+
+**Status:** [In Progress/Complete]
+
 ---
 
 ## 🚀 Quick Start
@@ -65,43 +82,39 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Run the Web App
+### Run the Web Application
 
 ```bash
-# Start Streamlit application
+# Start Dataset 1 (UK Housing) Streamlit app
 streamlit run app.py
 
-# App will open in browser at http://localhost:8501
+# Start Dataset 2 (UK Electricity) Streamlit app
+streamlit run electricity_app.py
+
+# Apps will open in browser at http://localhost:8501
 ```
 
 ### Notebook Workflow
 
-Run notebooks in order:
-
+**Dataset 1 - UK Housing (Marin Janushaj):**
 ```bash
-# 1. Load data
-jupyter notebook dataset1_uk_housing/1_load.ipynb
+jupyter notebook dataset1_uk_housing/1_load.ipynb           # Data acquisition
+jupyter notebook dataset1_uk_housing/2_clean.ipynb          # Data cleaning
+jupyter notebook dataset1_uk_housing/3_eda.ipynb            # Exploratory analysis
+jupyter notebook dataset1_uk_housing/4_model.ipynb          # Manual model training
+jupyter notebook dataset1_uk_housing/4.5_pycaret_comparison.ipynb  # AutoML
+jupyter notebook dataset1_uk_housing/4.7_sagemaker_ready.ipynb     # AWS SageMaker
+jupyter notebook dataset1_uk_housing/6_model_comparison.ipynb      # Comparison
+jupyter notebook dataset1_uk_housing/5_deploy.ipynb        # Deployment guide
+```
 
-# 2. Clean data
-jupyter notebook dataset1_uk_housing/2_clean.ipynb
-
-# 3. Exploratory data analysis
-jupyter notebook dataset1_uk_housing/3_eda.ipynb
-
-# 4. Model training
-jupyter notebook dataset1_uk_housing/4_model.ipynb
-
-# 5. AutoML comparison (optional)
-jupyter notebook dataset1_uk_housing/4.5_pycaret_comparison.ipynb
-
-# 6. AWS SageMaker cloud training
-jupyter notebook dataset1_uk_housing/4.7_sagemaker_ready.ipynb
-
-# 7. Model comparison
-jupyter notebook dataset1_uk_housing/6_model_comparison.ipynb
-
-# 8. Deployment guide
-jupyter notebook dataset1_uk_housing/5_deploy.ipynb
+**Dataset 2 - UK Electricity (Yunus Eren Ertaş):**
+```bash
+jupyter notebook dataset2_uk_electricity/1_combine.ipynb    # Data combination
+jupyter notebook dataset2_uk_electricity/2_clean.ipynb      # Data cleaning
+jupyter notebook dataset2_uk_electricity/3_eda.ipynb        # Exploratory analysis
+jupyter notebook dataset2_uk_electricity/4_model.ipynb      # Model training
+jupyter notebook dataset2_uk_electricity/5_deploy.ipynb     # Deployment
 ```
 
 ---
@@ -374,9 +387,15 @@ cloud-ai-project/
 │   └── .github/workflows/            # CI/CD pipelines
 │       └── deploy.example.yml
 │
-├── dataset2_uk_electricity/          # Project 2 (TBD)
+├── dataset2_uk_electricity/          # Project 2 - UK Electricity (Yunus)
+│   ├── 1_combine.ipynb               # Data combination
+│   ├── 2_clean.ipynb                 # Data cleaning
+│   ├── 3_eda.ipynb                   # Exploratory analysis
+│   ├── 4_model.ipynb                 # Model training
+│   └── 5_deploy.ipynb                # Deployment guide
 │
-├── app.py                            # Streamlit web application
+├── app.py                            # Streamlit app (Dataset 1)
+├── electricity_app.py                # Streamlit app (Dataset 2)
 ├── requirements.txt                  # Python dependencies
 ├── README.md                         # This file
 ├── NEXT_STEPS.md                     # Development roadmap
@@ -471,25 +490,35 @@ cloud-ai-project/
 
 ## 👥 Team Contributions
 
-**Marin Janushaj**
-- Data loading and cleaning
-- Model training (Manual & AWS)
-- Streamlit application
-- Deployment infrastructure
+### 🏡 Dataset 1: UK Housing Price Prediction
+**Lead:** Marin Janushaj
+- Complete data pipeline (loading, cleaning, EDA)
+- Model training (Manual, AutoML, AWS SageMaker)
+- Hyperparameter tuning and optimization
+- Model comparison and evaluation
+- Streamlit web application development
+- Documentation and notebooks
 
-**Yunus Eren Ertaş**
-- Exploratory data analysis
-- PyCaret AutoML
-- Model comparison
-- Documentation
+### ⚡ Dataset 2: UK Electricity Consumption Analysis
+**Lead:** Yunus Eren Ertaş
+- Data combination and preprocessing
+- Time series analysis and EDA
+- Model training and forecasting
+- Pattern recognition and insights
+- Electricity consumption Streamlit app
+- Dataset 2 documentation
 
-**Alexandros Gkiorgkinis**
-- Feature engineering
-- Visualization
-- Testing and validation
-- Presentation materials
+### 🚀 Deployment, Frontend & Backend
+**Lead:** Alexandros Gkiorgkinis
+- Production deployment infrastructure
+- Frontend design and user experience
+- Backend API development
+- Docker containerization
+- CI/CD pipeline setup
+- System integration and testing
+- Cloud deployment (AWS, Streamlit Cloud)
 
-*Note: All team members contributed to all aspects - this is a collaborative project!*
+*Note: This is a collaborative effort - all team members contributed to project planning, presentations, and overall success!*
 
 ---
 
