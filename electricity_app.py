@@ -35,7 +35,7 @@ def get_model_info():
         }
 
 
-def predict_single_hour(year, month, day, hour):
+def predict_single_hour(year, month, day, hour, is_first_call=False):
     """Call ML service API to predict for a single hour."""
     try:
         payload = {
@@ -44,7 +44,9 @@ def predict_single_hour(year, month, day, hour):
             "day": day,
             "hour": hour
         }
-        r = requests.post(PREDICT_ENDPOINT, json=payload, timeout=5)
+        # First call needs longer timeout (model loading can take 15-20 seconds)
+        timeout = 30 if is_first_call else 15
+        r = requests.post(PREDICT_ENDPOINT, json=payload, timeout=timeout)
         r.raise_for_status()
         return r.json()
     except Exception as e:
@@ -61,14 +63,19 @@ def generate_forecast(start_datetime, hours):
     status_text = st.empty()
 
     for i in range(hours):
-        status_text.text(f"Generating forecast: {i+1}/{hours} hours...")
+        # Show special message for first prediction (model loading)
+        if i == 0:
+            status_text.text(f"Loading model and generating forecast: {i+1}/{hours} hours...")
+        else:
+            status_text.text(f"Generating forecast: {i+1}/{hours} hours...")
         progress_bar.progress((i + 1) / hours)
 
         result = predict_single_hour(
             year=current_dt.year,
             month=current_dt.month,
             day=current_dt.day,
-            hour=current_dt.hour
+            hour=current_dt.hour,
+            is_first_call=(i == 0)  # First call loads model, needs longer timeout
         )
 
         if result and "demand_mw" in result:
