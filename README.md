@@ -7,7 +7,7 @@
 
 **Course:** Cloud & AI
 **Academic Year:** 2025
-**Institution:** [Your Institution]
+**Institution:** Thomas More University - Geel
 
 ---
 
@@ -509,7 +509,7 @@ cloud-ai-project/
 - Dataset 2 documentation
 
 ### 🚀 Deployment, Frontend & Backend
-**Lead:** Alexandros Gkiorgkinis
+**Lead:** Marin Janushaj / Yunus Eren Ertas
 - Production deployment infrastructure
 - Frontend design and user experience
 - Backend API development
