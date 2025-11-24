@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+venv311/
+ENV/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in containers)
+README.md
+*.md
+docs/
+
+# Data (mounted as volumes instead)
+data/raw/
+data/clean/*.parquet
+
+# Notebooks (not needed in production)
+dataset1_uk_housing/*.ipynb
+dataset2_uk_electricity/*.ipynb
+
+# Test files
+*_test.py
+test_*.py
+tests/
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# CI/CD
+.github/
+
+# Other
+.env
+.env.local
+*.bak
+*.tmp
