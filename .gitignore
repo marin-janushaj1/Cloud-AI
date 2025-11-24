@@ -40,6 +40,7 @@ data/clean/**
 # OPTIONAL: keep a specific small model (uncomment if needed and <100MB)
 #!data/clean/electricity_model.pkl
 !data/clean/best_model.pkl
+!models/best_electricity_model_fast.pkl
 
 # AWS SageMaker artifacts
 *.tar.gz
