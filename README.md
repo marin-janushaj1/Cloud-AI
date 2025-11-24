@@ -3,7 +3,6 @@
 **Team Members:**
 - **Marin Janushaj** - Dataset 1: UK Housing Price Prediction
 - **Yunus Eren Ertaş** - Dataset 2: UK Electricity Consumption Analysis
-- **Alexandros Gkiorgkinis** - Deployment, Frontend & Backend
 
 **Course:** Cloud & AI
 **Academic Year:** 2025
