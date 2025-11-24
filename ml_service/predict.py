@@ -56,17 +56,16 @@ class ModelPredictor:
             else:
                 logger.warning(f"Housing model not found at {housing_path}")
 
-            # ----- Electricity model (optional) -----
-            # Use environment variable or fallback to default path
+            # ----- Electricity model (lazy loading) -----
+            # Store path but don't load until first prediction request
+            # This saves memory and prevents crashes on startup
             import os
-            elec_path_str = os.getenv("ELECTRICITY_MODEL_PATH", "../models/best_electricity_model_fast.pkl")
-            elec_path = Path(elec_path_str)
-
-            if elec_path.exists():
-                self.electricity_model = joblib.load(elec_path)
-                logger.info(f"✓ Loaded electricity model from {elec_path}")
-            else:
-                logger.warning(f"Electricity model not found at {elec_path}")
+            self.electricity_model = None
+            self.electricity_model_path = os.getenv(
+                "ELECTRICITY_MODEL_PATH",
+                "../models/best_electricity_model_fast.pkl"
+            )
+            logger.info(f"Electricity model will be lazy-loaded from {self.electricity_model_path}")
 
         except Exception as e:
             logger.error(f"Error loading models: {e}")
@@ -189,8 +188,15 @@ class ModelPredictor:
         Returns:
             Dictionary with demand prediction in MW
         """
+        # Lazy load electricity model on first use
         if self.electricity_model is None:
-            raise ValueError("Electricity model not loaded")
+            logger.info("Loading electricity model on first use...")
+            elec_path = Path(self.electricity_model_path)
+            if not elec_path.exists():
+                raise FileNotFoundError(f"Electricity model not found at {elec_path}")
+
+            self.electricity_model = joblib.load(elec_path)
+            logger.info(f"✓ Electricity model loaded successfully")
 
         try:
             from datetime import datetime
@@ -233,9 +239,13 @@ class ModelPredictor:
     # ------------------------------------------------------------------
     def health_check(self) -> Dict[str, Any]:
         """Check if models are loaded and ready, and expose metrics"""
+        # Check if electricity model file exists (even if not loaded yet)
+        elec_available = Path(self.electricity_model_path).exists()
+
         return {
             "housing_model_loaded": self.housing_model is not None,
-            "electricity_model_loaded": self.electricity_model is not None,
+            "electricity_model_loaded": self.electricity_model is not None or elec_available,
+            "electricity_model_status": "loaded" if self.electricity_model else ("available" if elec_available else "not_found"),
             "housing_model_type": type(self.housing_model).__name__ if self.housing_model else None,
             "model_name": self.housing_model_name,
             "metrics": self.housing_metrics,
