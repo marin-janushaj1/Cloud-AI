@@ -1,167 +1,228 @@
-# electricity_app.py — Final Working Version (Regression Forecasting)
-
 import streamlit as st
 import pandas as pd
-import numpy as np
-import joblib
-from datetime import timedelta
+import requests
 import plotly.graph_objects as go
+from datetime import datetime, timedelta
+
+# -------------------------------------------------------------------
+# CONFIG
+# -------------------------------------------------------------------
+ML_SERVICE_URL = "http://158.180.57.220:5001"
+PREDICT_ENDPOINT = f"{ML_SERVICE_URL}/predict-electricity"
+HEALTH_ENDPOINT = f"{ML_SERVICE_URL}/health"
+
+st.set_page_config(
+    page_title="UK Electricity Demand Predictor",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# -------------------------------------------------------------------
+# HELPERS
+# -------------------------------------------------------------------
+@st.cache_data(ttl=30)
+def get_model_info():
+    """Fetch model info from ML service."""
+    try:
+        r = requests.get(HEALTH_ENDPOINT, timeout=3)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return {
+            "electricity_model_loaded": False,
+            "status": "degraded"
+        }
 
 
-# --------------------------------------------------
-# Load trained PyCaret regression model (cached)
-# --------------------------------------------------
-@st.cache_resource
-def load_model_file():
-    return joblib.load("models/best_electricity_model_fast.pkl")
-
-model = load_model_file()
-
-
-# --------------------------------------------------
-# Load historical data (cached)
-# --------------------------------------------------
-@st.cache_data
-def load_history():
-    df = pd.read_parquet("data/clean/uk_electricity_hourly.parquet")
-    df.index = pd.to_datetime(df.index)
-    df.sort_index(inplace=True)
-    return df
-
-history = load_history()
+def predict_single_hour(year, month, day, hour):
+    """Call ML service API to predict for a single hour."""
+    try:
+        payload = {
+            "year": year,
+            "month": month,
+            "day": day,
+            "hour": hour
+        }
+        r = requests.post(PREDICT_ENDPOINT, json=payload, timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"Prediction failed: {e}")
+        return None
 
 
-# --------------------------------------------------
-# Feature engineering (MUST match training)
-# --------------------------------------------------
-TRAIN_FEATURES = [
-    "hour", "day_of_week", "month", "week", "is_weekend",
-    "lag_1", "lag_24", "lag_168", "roll_24", "roll_168"
-]
-
-def add_features(df):
-    df["hour"] = df.index.hour
-    df["day_of_week"] = df.index.dayofweek
-    df["month"] = df.index.month
-    df["week"] = df.index.isocalendar().week.astype(int)
-    df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
-    return df
-
-
-def make_input_row(ts, hist_df):
-    """Construct a 1-row dataframe matching EXACT model features."""
-
-    temp = pd.DataFrame(index=[ts])
-    temp = add_features(temp)
-
-    # Lag features using last known true/predicted demand
-    temp["lag_1"] = hist_df["demand_mw"].iloc[-1]
-    temp["lag_24"] = hist_df["demand_mw"].iloc[-24]
-    temp["lag_168"] = hist_df["demand_mw"].iloc[-168]
-
-    # Rolling means
-    temp["roll_24"] = hist_df["demand_mw"].iloc[-24:].mean()
-    temp["roll_168"] = hist_df["demand_mw"].iloc[-168:].mean()
-
-    # Ensure correct feature set
-    for col in TRAIN_FEATURES:
-        if col not in temp:
-            temp[col] = 0
-
-    temp = temp[TRAIN_FEATURES]   # correct order
-
-    return temp
-
-
-# --------------------------------------------------
-# Recursive multi-step forecasting
-# --------------------------------------------------
-def forecast_future(horizon_hours):
-    df = history.copy()
-    last_ts = df.index.max()
+def generate_forecast(start_datetime, hours):
+    """Generate forecast by calling API for each hour."""
     results = []
+    current_dt = start_datetime
 
-    for _ in range(horizon_hours):
-        next_ts = last_ts + timedelta(hours=1)
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-        row = make_input_row(next_ts, df)
-        yhat = float(model.predict(row)[0])
+    for i in range(hours):
+        status_text.text(f"Generating forecast: {i+1}/{hours} hours...")
+        progress_bar.progress((i + 1) / hours)
 
-        # Append forecast to history so lags update
-        df.loc[next_ts, "demand_mw"] = yhat
-        results.append((next_ts, yhat))
+        result = predict_single_hour(
+            year=current_dt.year,
+            month=current_dt.month,
+            day=current_dt.day,
+            hour=current_dt.hour
+        )
 
-        last_ts = next_ts
+        if result and "demand_mw" in result:
+            results.append({
+                "timestamp": current_dt,
+                "demand_mw": result["demand_mw"]
+            })
+        else:
+            st.error(f"Failed to get prediction for {current_dt}")
+            break
 
-    pred_df = pd.DataFrame(results, columns=["timestamp", "forecast"])
-    pred_df.set_index("timestamp", inplace=True)
-    return pred_df
+        current_dt += timedelta(hours=1)
+
+    progress_bar.empty()
+    status_text.empty()
+
+    if results:
+        return pd.DataFrame(results).set_index("timestamp")
+    return None
 
 
-# --------------------------------------------------
-# Streamlit UI
-# --------------------------------------------------
-st.set_page_config(page_title="Electricity Forecast", page_icon="⚡", layout="wide")
-
+# -------------------------------------------------------------------
+# HEADER
+# -------------------------------------------------------------------
 st.title("⚡ UK Electricity Demand Predictor")
-st.write("Forecast electricity demand using a PyCaret regression model.")
+st.markdown("Forecast electricity demand using ML predictions from Oracle Cloud backend")
 
-# Sidebar settings
-st.sidebar.header("Forecast Settings")
-mode = st.sidebar.radio("Forecast horizon type", ["Hours", "Days", "Weeks"])
+# Backend status
+ml_info = get_model_info()
+backend_status = ml_info.get("status", "unknown")
+elec_loaded = ml_info.get("electricity_model_loaded", False)
+
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown(f"""
+    **Backend Status:** {'🟢 Healthy' if backend_status == 'healthy' else '🔴 Degraded'}
+    **Electricity Model:** {'✅ Loaded' if elec_loaded else '❌ Not Loaded'}
+    """)
+with col2:
+    if st.button("🔄 Refresh Status"):
+        st.cache_data.clear()
+        st.rerun()
+
+if not elec_loaded:
+    st.error("⚠️ Electricity model is not loaded on the backend. Please check the ML service.")
+    st.stop()
+
+st.markdown("---")
+
+# -------------------------------------------------------------------
+# SIDEBAR SETTINGS
+# -------------------------------------------------------------------
+st.sidebar.header("⚙️ Forecast Settings")
+
+# Start date/time
+st.sidebar.subheader("Start Date & Time")
+start_date = st.sidebar.date_input(
+    "Start Date",
+    value=datetime.now().date(),
+    min_value=datetime(2025, 1, 1).date(),
+    max_value=datetime(2030, 12, 31).date()
+)
+start_hour = st.sidebar.slider("Start Hour", 0, 23, datetime.now().hour)
+
+# Forecast horizon
+st.sidebar.subheader("Forecast Horizon")
+mode = st.sidebar.radio("Horizon Type", ["Hours", "Days", "Weeks"])
 
 if mode == "Hours":
-    horizon = st.sidebar.slider("Hours to forecast", 1, 240, 72)
+    horizon = st.sidebar.slider("Hours to forecast", 1, 72, 24)
 elif mode == "Days":
-    horizon = st.sidebar.slider("Days to forecast", 1, 30, 7) * 24
+    horizon = st.sidebar.slider("Days to forecast", 1, 7, 3) * 24
 else:
-    horizon = st.sidebar.slider("Weeks to forecast", 1, 8, 2) * 7 * 24
+    horizon = st.sidebar.slider("Weeks to forecast", 1, 4, 1) * 7 * 24
 
-show_history = st.sidebar.checkbox("Show history", True)
-history_days = st.sidebar.slider("History window (days)", 1, 60, 14) if show_history else 0
+# Create start datetime
+start_datetime = datetime.combine(start_date, datetime.min.time().replace(hour=start_hour))
 
+st.sidebar.markdown("---")
+st.sidebar.info(f"""
+**Summary:**
+- Start: {start_datetime.strftime('%Y-%m-%d %H:%00')}
+- Forecast: {horizon} hours
+- End: {(start_datetime + timedelta(hours=horizon-1)).strftime('%Y-%m-%d %H:%00')}
+""")
 
-# --------------------------------------------------
-# Run forecast
-# --------------------------------------------------
-if st.button("Run Forecast", use_container_width=True):
-    pred_df = forecast_future(horizon)
+# -------------------------------------------------------------------
+# MAIN CONTENT
+# -------------------------------------------------------------------
+if st.button("🚀 Generate Forecast", use_container_width=True, type="primary"):
 
-    st.success("Forecast generated successfully!")
+    with st.spinner("Generating forecast from backend..."):
+        forecast_df = generate_forecast(start_datetime, horizon)
 
-    # Plot forecast only
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=pred_df.index, y=pred_df["forecast"],
-                             name="Forecast", line=dict(color="cyan", width=3)))
-    fig.update_layout(template="plotly_dark", height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    if forecast_df is not None and not forecast_df.empty:
+        st.success(f"✅ Generated {len(forecast_df)} hour forecast!")
 
-    # Plot history + forecast
-    if show_history:
-        hist = history.tail(history_days * 24)
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=hist.index, y=hist["demand_mw"],
-                                  name="History", line=dict(color="orange", width=2)))
-        fig2.add_trace(go.Scatter(x=pred_df.index, y=pred_df["forecast"],
-                                  name="Forecast", line=dict(color="cyan", width=3)))
-        fig2.update_layout(template="plotly_dark", height=400)
-        st.plotly_chart(fig2, use_container_width=True)
+        # Statistics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📉 Min Demand", f"{forecast_df['demand_mw'].min():,.0f} MW")
+        with col2:
+            st.metric("📊 Avg Demand", f"{forecast_df['demand_mw'].mean():,.0f} MW")
+        with col3:
+            st.metric("📈 Max Demand", f"{forecast_df['demand_mw'].max():,.0f} MW")
 
-    # Summary metrics
-    st.metric("Min (MW)", f"{pred_df['forecast'].min():,.0f}")
-    st.metric("Max (MW)", f"{pred_df['forecast'].max():,.0f}")
-    st.metric("Avg (MW)", f"{pred_df['forecast'].mean():,.0f}")
+        # Chart
+        st.subheader("📊 Demand Forecast")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=forecast_df.index,
+            y=forecast_df["demand_mw"],
+            mode='lines+markers',
+            name='Forecast',
+            line=dict(color='#00D9FF', width=3),
+            marker=dict(size=4)
+        ))
+        fig.update_layout(
+            template="plotly_dark",
+            height=500,
+            xaxis_title="Date & Time",
+            yaxis_title="Demand (MW)",
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Forecast table
-    st.dataframe(pred_df)
+        # Data table
+        with st.expander("📋 View Forecast Data"):
+            display_df = forecast_df.copy()
+            display_df.index = display_df.index.strftime('%Y-%m-%d %H:%00')
+            display_df['demand_mw'] = display_df['demand_mw'].round(2)
+            st.dataframe(display_df, use_container_width=True)
 
-    # Download
-    st.download_button(
-        label="Download CSV",
-        data=pred_df.to_csv().encode(),
-        file_name="forecast.csv",
-        mime="text/csv",
-    )
-
+        # Download
+        csv = forecast_df.to_csv()
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name=f"electricity_forecast_{start_datetime.strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        st.error("❌ Failed to generate forecast. Please check backend connection.")
 else:
-    st.info("Click **Run Forecast** to generate predictions.")
+    st.info("👆 Click the button above to generate an electricity demand forecast")
+
+# -------------------------------------------------------------------
+# FOOTER
+# -------------------------------------------------------------------
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #666;'>
+    <p>Powered by PyCaret ML Model • Backend: Oracle Cloud • Frontend: Streamlit Cloud</p>
+    <p>🤖 Generated with <a href='https://claude.com/claude-code'>Claude Code</a></p>
+</div>
+""", unsafe_allow_html=True)

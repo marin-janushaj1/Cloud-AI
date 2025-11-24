@@ -1,0 +1,10 @@
+# Minimal requirements for Electricity Streamlit app
+# App connects to backend API - no model loading needed
+
+# Core
+streamlit>=1.30.0
+pandas>=2.0.0
+requests>=2.28.0
+
+# Visualization
+plotly>=5.14.0
