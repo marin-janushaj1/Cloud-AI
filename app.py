@@ -4,12 +4,14 @@ import streamlit as st
 import requests
 from pathlib import Path
 import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime
 
+# -------------------------------------------------------------------
+# CONFIG
+# -------------------------------------------------------------------
 API_BASE_URL = "http://158.180.57.220:8080/api/v1"
+ML_HEALTH_URL = "http://158.180.57.220:5001/health"
 
-# Page config
 st.set_page_config(
     page_title="UK House Price Predictor",
     page_icon="🏡",
@@ -17,7 +19,34 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# -------------------------------------------------------------------
+# HELPERS
+# -------------------------------------------------------------------
+@st.cache_data(ttl=30)
+def get_model_info():
+    """Fetch model name + metrics from ML service /health."""
+    try:
+        r = requests.get(ML_HEALTH_URL, timeout=3)
+        r.raise_for_status()
+        data = r.json()
+        return data
+    except Exception:
+        return {
+            "model_name": "Unknown",
+            "metrics": {},
+            "status": "degraded",
+        }
+
+
+# Fetch once at start
+ml_info = get_model_info()
+metrics = ml_info.get("metrics", {}) or {}
+remote_model_name = ml_info.get("model_name", "Unknown")
+backend_status = ml_info.get("status", "unknown")
+
+# -------------------------------------------------------------------
+# STYLING
+# -------------------------------------------------------------------
 st.markdown("""
 <style>
     .main-header {
@@ -47,43 +76,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Header
+# -------------------------------------------------------------------
+# HEADER
+# -------------------------------------------------------------------
 st.markdown('<p class="main-header">🏡 UK House Price Predictor</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Team Yunus — Cloud AI | Powered by Machine Learning</p>', unsafe_allow_html=True)
 
-# ------------------------------------------------------------
-# Sidebar - Model Information (static for cloud deployment)
-# ------------------------------------------------------------
-with st.sidebar:
-    st.header("📊 Model Information")
-
-    st.markdown(f"""
-    **Model Type:** LightGBM Regressor (remote API)
-    **Deployment:** Oracle Cloud VM + Docker
-    """)
-
-    st.divider()
-
-    st.subheader("Performance Metrics")
-    st.metric("R² Score", "N/A")
-    st.metric("Mean Absolute Error", "N/A")
-    st.metric("RMSE", "N/A")
-
-    st.divider()
-
-    st.subheader("About")
-    st.markdown("""
-    This predictor uses historical UK housing data (1995-2017) via a cloud-hosted
-    ML service. Your input is sent to a backend API, which runs a trained model
-    and returns the predicted price and confidence interval.
-    """)
-
-    st.divider()
-    st.caption("Backend: Python ML service + Go API Gateway on Oracle Cloud")
-
-# ------------------------------------------------------------
-# County mapping for user-friendly selection
-# ------------------------------------------------------------
+# -------------------------------------------------------------------
+# CONSTANTS FOR UI
+# -------------------------------------------------------------------
 POPULAR_COUNTIES = [
     "GREATER LONDON",
     "GREATER MANCHESTER",
@@ -110,12 +111,52 @@ PROPERTY_TYPE_MAP = {
     "Other": "O"
 }
 
-# ------------------------------------------------------------
-# Main Interface
-# ------------------------------------------------------------
+# -------------------------------------------------------------------
+# SIDEBAR
+# -------------------------------------------------------------------
+with st.sidebar:
+    st.header("📊 Model Information")
+
+    status_emoji = "🟢" if backend_status == "healthy" else "🟠"
+    st.markdown(f"**Backend status:** {status_emoji} `{backend_status}`")
+
+    st.markdown(f"""
+**Model Type:** {remote_model_name}  
+**Deployment:** Oracle Cloud VM + Docker  
+**API Base URL:** `{API_BASE_URL}`
+""")
+
+    st.divider()
+
+    st.subheader("Performance Metrics")
+
+    if metrics:
+        st.metric("R² Score", f"{metrics.get('test_r2', 0):.3f}")
+        st.metric("Mean Absolute Error", f"£{metrics.get('test_mae', 0):,.0f}")
+        st.metric("RMSE", f"£{metrics.get('test_rmse', 0):,.0f}")
+    else:
+        st.metric("R² Score", "N/A")
+        st.metric("Mean Absolute Error", "N/A")
+        st.metric("RMSE", "N/A")
+
+    st.divider()
+
+    st.subheader("About")
+    st.markdown("""
+This predictor uses historical UK housing data (1995–2017) via a
+cloud-hosted ML service.  
+
+Your input is sent to a backend API, which runs a trained LightGBM model
+and returns the predicted price and a confidence interval.
+""")
+
+    st.caption("Backend: Python ML service + Go API Gateway on Oracle Cloud")
+
+# -------------------------------------------------------------------
+# MAIN FORM
+# -------------------------------------------------------------------
 st.subheader("🏠 Enter Property Details")
 
-# Create two columns for better layout
 col1, col2 = st.columns(2)
 
 with col1:
@@ -158,7 +199,6 @@ with col2:
         help="Year when the property was/will be sold"
     )
 
-    # Month selection (quarter is automatically calculated)
     month = st.selectbox(
         "Month",
         options=list(range(1, 13)),
@@ -170,17 +210,15 @@ with col2:
         help="Month when the property was/will be sold"
     )
 
-    # Calculate quarter from month automatically (for display)
-    quarter = (month - 1) // 3 + 1
+    quarter = (month - 1) // 3 + 1  # for display only
 
 st.divider()
 
-# Predict button
 predict_button = st.button("🔮 Predict House Price", type="primary", use_container_width=True)
 
-# ------------------------------------------------------------
-# Prediction & Results (via backend API)
-# ------------------------------------------------------------
+# -------------------------------------------------------------------
+# PREDICTION VIA API
+# -------------------------------------------------------------------
 if predict_button:
     with st.spinner("Sending data to cloud ML service..."):
         try:
@@ -191,73 +229,65 @@ if predict_button:
                 "county": county,
                 "year": year,
                 "month": month
-                # quarter is typically derived in backend if needed
             }
 
-            response = requests.post(
+            resp = requests.post(
                 f"{API_BASE_URL}/predict/housing",
                 json=payload,
                 timeout=10
             )
-            response.raise_for_status()
-            data = response.json()
+            resp.raise_for_status()
+            data = resp.json()
 
-            # Expected keys from API:
-            # price, confidence_lower, confidence_upper (if implemented)
-            predicted_price = float(data.get("price", 0))
+            predicted_price = float(data.get("price", 0.0))
             lower_bound = data.get("confidence_lower")
             upper_bound = data.get("confidence_upper")
 
-            # Fallback if API didn't send CI
+            # Fallback CI if not returned (should not happen with your current service)
             if lower_bound is None or upper_bound is None:
-                # basic ±25% fallback
                 lower_bound = max(1000, predicted_price * 0.75)
                 upper_bound = predicted_price * 1.25
 
-            # Sanity check: realistic UK house prices
+            # Sanity check
             if predicted_price < 1000 or predicted_price > 10_000_000:
-                st.warning(f"⚠️ Unusual prediction detected: £{predicted_price:,.0f}.")
-            
+                st.warning(
+                    f"⚠️ Unusual prediction detected: £{predicted_price:,.0f}."
+                )
+
             st.success("✅ Prediction Complete!")
 
-            # Main price display
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
+            # METRICS DISPLAY
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("Predicted Price", f"£{predicted_price:,.0f}")
+            with c2:
                 st.metric(
-                    label="Predicted Price",
-                    value=f"£{predicted_price:,.0f}",
-                    delta=None
+                    "Lower Estimate",
+                    f"£{lower_bound:,.0f}"
+                )
+            with c3:
+                st.metric(
+                    "Upper Estimate",
+                    f"£{upper_bound:,.0f}"
                 )
 
-            with col2:
-                st.metric(
-                    label="Lower Estimate",
-                    value=f"£{lower_bound:,.0f}"
-                )
-
-            with col3:
-                st.metric(
-                    label="Upper Estimate",
-                    value=f"£{upper_bound:,.0f}"
-                )
-
-            # Visualization
+            # -------------------------------------------------------------------
+            # CHART
+            # -------------------------------------------------------------------
             st.subheader("📈 Price Confidence Interval")
 
             fig = go.Figure()
-
             fig.add_trace(go.Bar(
-                x=['Estimated Price'],
+                x=["Estimated Price"],
                 y=[predicted_price],
                 error_y=dict(
-                    type='data',
+                    type="data",
                     symmetric=False,
                     array=[upper_bound - predicted_price],
                     arrayminus=[predicted_price - lower_bound]
                 ),
-                marker_color='#1f77b4',
-                name='Predicted Price'
+                marker_color="#1f77b4",
+                name="Predicted Price"
             ))
 
             fig.update_layout(
@@ -269,37 +299,47 @@ if predict_button:
 
             st.plotly_chart(fig, use_container_width=True)
 
-            # Property Summary
+            # -------------------------------------------------------------------
+            # SUMMARY TEXT
+            # -------------------------------------------------------------------
             st.subheader("📋 Property Summary")
-            summary_col1, summary_col2 = st.columns(2)
+            s1, s2 = st.columns(2)
 
-            with summary_col1:
+            with s1:
                 st.markdown(f"""
-                **Property Details:**
-                - Type: {property_type_name}
-                - Age: {is_new_label}
-                - Tenure: {duration_label}
-                """)
+**Property Details:**
+- Type: {property_type_name}
+- Age: {is_new_label}
+- Tenure: {duration_label}
+""")
 
-            with summary_col2:
-                month_names = ["January", "February", "March", "April", "May", "June",
-                              "July", "August", "September", "October", "November", "December"]
+            month_names = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ]
+
+            with s2:
                 st.markdown(f"""
-                **Location & Time:**
-                - County: {county}
-                - Year: {year}
-                - Month: {month_names[month-1]}
-                """)
+**Location & Time:**
+- County: {county}
+- Year: {year}
+- Month: {month_names[month-1]}
+""")
 
             st.info(f"""
-            💡 **Insight:** Based on the cloud-hosted ML model, this {property_type_name.lower()} in {county}
-            is estimated at **£{predicted_price:,.0f}** with a range of
-            **£{lower_bound:,.0f} - £{upper_bound:,.0f}**.
-            """)
+💡 **Insight:** Based on the cloud-hosted ML model, this
+{property_type_name.lower()} in {county} is estimated at
+**£{predicted_price:,.0f}** with a range of
+**£{lower_bound:,.0f} – £{upper_bound:,.0f}**.
+""")
 
-            # Debug / API response
+            # -------------------------------------------------------------------
+            # DEBUG / API DETAILS
+            # -------------------------------------------------------------------
             with st.expander("🔍 Technical API Details"):
-                st.write("**Raw API Response:**")
+                st.write("**Request payload:**")
+                st.json(payload)
+                st.write("**API response:**")
                 st.json(data)
 
         except Exception as e:
@@ -308,9 +348,9 @@ if predict_button:
                 import traceback
                 st.code(traceback.format_exc())
 
-# ------------------------------------------------------------
-# Footer
-# ------------------------------------------------------------
+# -------------------------------------------------------------------
+# FOOTER
+# -------------------------------------------------------------------
 st.divider()
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 2rem;'>
