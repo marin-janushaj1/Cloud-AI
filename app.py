@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
 import streamlit as st
-import joblib
+import requests
 from pathlib import Path
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+
+API_BASE_URL = "http://158.180.57.220:8080/api/v1"
 
 # Page config
 st.set_page_config(
@@ -50,69 +52,34 @@ st.markdown('<p class="main-header">🏡 UK House Price Predictor</p>', unsafe_a
 st.markdown('<p class="sub-header">Team Yunus — Cloud AI | Powered by Machine Learning</p>', unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# Load model bundle
-# ------------------------------------------------------------
-@st.cache_resource
-def load_model():
-    """Load the trained model with caching"""
-    bundle_path = Path("data/clean/best_model.pkl")
-
-    if not bundle_path.exists():
-        st.error(f"Model not found at {bundle_path}. Please run notebook 4 to train the model.")
-        st.stop()
-
-    try:
-        bundle = joblib.load(bundle_path)
-
-        if isinstance(bundle, dict) and 'model' in bundle:
-            return bundle
-        else:
-            st.error("Invalid model format. Please retrain using notebook 4.")
-            st.stop()
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        st.stop()
-
-bundle = load_model()
-model = bundle['model']
-target_encoder = bundle.get('target_encoder')
-feature_names = bundle.get('feature_names')
-metrics = bundle.get('metrics', {})
-metadata = bundle.get('metadata', {})
-
-# ------------------------------------------------------------
-# Sidebar - Model Information
+# Sidebar - Model Information (static for cloud deployment)
 # ------------------------------------------------------------
 with st.sidebar:
     st.header("📊 Model Information")
 
     st.markdown(f"""
-    **Model Type:** {bundle.get('model_name', 'Unknown')}
-    **Training Date:** {metadata.get('training_date', 'N/A')}
-    **Training Samples:** {metadata.get('training_samples', 'N/A'):,}
+    **Model Type:** LightGBM Regressor (remote API)
+    **Deployment:** Oracle Cloud VM + Docker
     """)
 
     st.divider()
 
     st.subheader("Performance Metrics")
-    st.metric("R² Score", f"{metrics.get('test_r2', 0):.3f}")
-    st.metric("Mean Absolute Error", f"£{metrics.get('test_mae', 0):,.0f}")
-    st.metric("RMSE", f"£{metrics.get('test_rmse', 0):,.0f}")
+    st.metric("R² Score", "N/A")
+    st.metric("Mean Absolute Error", "N/A")
+    st.metric("RMSE", "N/A")
 
     st.divider()
 
     st.subheader("About")
     st.markdown("""
-    This predictor uses historical UK housing data (1995-2017) to estimate property prices based on:
-    - Property type
-    - Location (county)
-    - Age (new/established)
-    - Tenure type
-    - Year of sale
+    This predictor uses historical UK housing data (1995-2017) via a cloud-hosted
+    ML service. Your input is sent to a backend API, which runs a trained model
+    and returns the predicted price and confidence interval.
     """)
 
     st.divider()
-    st.caption("Built with Streamlit & scikit-learn")
+    st.caption("Backend: Python ML service + Go API Gateway on Oracle Cloud")
 
 # ------------------------------------------------------------
 # County mapping for user-friendly selection
@@ -142,51 +109,6 @@ PROPERTY_TYPE_MAP = {
     "Flat/Apartment": "F",
     "Other": "O"
 }
-
-# ------------------------------------------------------------
-# Feature builder
-# ------------------------------------------------------------
-def make_features(property_type: str, is_new: str, duration: str,
-                  county: str, year: int, month: int, quarter: int) -> pd.DataFrame:
-    """Create feature DataFrame matching training format"""
-
-    row = pd.DataFrame([{
-        "type": property_type,
-        "is_new": is_new,
-        "duration": duration,
-        "county": county.upper(),
-        "year": year,
-        "month": month,
-        "quarter": quarter
-    }])
-
-    # Target encode county
-    if target_encoder is not None:
-        try:
-            enc_df = target_encoder.transform(row[["county"]])
-            row["county_encoded"] = enc_df["county"]
-        except:
-            row["county_encoded"] = 0.0
-    else:
-        row["county_encoded"] = 0.0
-
-    row = row.drop(columns=["county"])
-
-    # One-hot encode categorical features (don't drop first to get all columns)
-    row = pd.get_dummies(row, columns=["type", "is_new", "duration"], drop_first=False)
-
-    # Now drop the reference categories to match training (D, N, F are dropped during training)
-    cols_to_drop = ['type_D', 'is_new_N', 'duration_F']
-    row = row.drop(columns=[col for col in cols_to_drop if col in row.columns])
-
-    # Align to training features
-    if feature_names is not None:
-        for col in feature_names:
-            if col not in row.columns:
-                row[col] = 0
-        row = row[feature_names]
-
-    return row
 
 # ------------------------------------------------------------
 # Main Interface
@@ -248,7 +170,7 @@ with col2:
         help="Month when the property was/will be sold"
     )
 
-    # Calculate quarter from month automatically
+    # Calculate quarter from month automatically (for display)
     quarter = (month - 1) // 3 + 1
 
 st.divider()
@@ -257,40 +179,45 @@ st.divider()
 predict_button = st.button("🔮 Predict House Price", type="primary", use_container_width=True)
 
 # ------------------------------------------------------------
-# Prediction & Results
+# Prediction & Results (via backend API)
 # ------------------------------------------------------------
 if predict_button:
-    with st.spinner("Analyzing property data..."):
+    with st.spinner("Sending data to cloud ML service..."):
         try:
-            # Make prediction
-            X_row = make_features(
-                property_type=property_type,
-                is_new=is_new,
-                duration=duration,
-                county=county,
-                year=year,
-                month=month,
-                quarter=quarter
+            payload = {
+                "property_type": property_type,
+                "is_new": is_new,
+                "duration": duration,
+                "county": county,
+                "year": year,
+                "month": month
+                # quarter is typically derived in backend if needed
+            }
+
+            response = requests.post(
+                f"{API_BASE_URL}/predict/housing",
+                json=payload,
+                timeout=10
             )
+            response.raise_for_status()
+            data = response.json()
 
-            # Predict (model always returns log-transformed values)
-            y_log = model.predict(X_row)[0]
+            # Expected keys from API:
+            # price, confidence_lower, confidence_upper (if implemented)
+            predicted_price = float(data.get("price", 0))
+            lower_bound = data.get("confidence_lower")
+            upper_bound = data.get("confidence_upper")
 
-            # Convert back from log scale (log1p inverse is expm1)
-            # Model was trained with np.log1p(price), so we use np.expm1 to reverse
-            predicted_price = float(np.expm1(y_log))
+            # Fallback if API didn't send CI
+            if lower_bound is None or upper_bound is None:
+                # basic ±25% fallback
+                lower_bound = max(1000, predicted_price * 0.75)
+                upper_bound = predicted_price * 1.25
 
-            # Sanity check: realistic UK house prices are between £50K and £5M
+            # Sanity check: realistic UK house prices
             if predicted_price < 1000 or predicted_price > 10_000_000:
-                st.warning(f"⚠️ Unusual prediction detected: £{predicted_price:,.0f}. This might indicate a data issue.")
-                st.info(f"Debug: Log prediction value was {y_log:.4f}")
-
-            # Calculate confidence interval
-            mae = metrics.get('test_mae', 50000)
-            lower_bound = max(1000, predicted_price - 2 * mae)
-            upper_bound = predicted_price + 2 * mae
-
-            # Display results
+                st.warning(f"⚠️ Unusual prediction detected: £{predicted_price:,.0f}.")
+            
             st.success("✅ Prediction Complete!")
 
             # Main price display
@@ -305,16 +232,14 @@ if predict_button:
 
             with col2:
                 st.metric(
-                    label="Lower Estimate (95% CI)",
-                    value=f"£{lower_bound:,.0f}",
-                    delta=f"-{((predicted_price - lower_bound) / predicted_price * 100):.1f}%"
+                    label="Lower Estimate",
+                    value=f"£{lower_bound:,.0f}"
                 )
 
             with col3:
                 st.metric(
-                    label="Upper Estimate (95% CI)",
-                    value=f"£{upper_bound:,.0f}",
-                    delta=f"+{((upper_bound - predicted_price) / predicted_price * 100):.1f}%"
+                    label="Upper Estimate",
+                    value=f"£{upper_bound:,.0f}"
                 )
 
             # Visualization
@@ -322,7 +247,6 @@ if predict_button:
 
             fig = go.Figure()
 
-            # Add confidence interval bar
             fig.add_trace(go.Bar(
                 x=['Estimated Price'],
                 y=[predicted_price],
@@ -337,7 +261,7 @@ if predict_button:
             ))
 
             fig.update_layout(
-                title="Price Estimate with 95% Confidence Interval",
+                title="Price Estimate with Confidence Interval",
                 yaxis_title="Price (£)",
                 showlegend=False,
                 height=400
@@ -367,20 +291,16 @@ if predict_button:
                 - Month: {month_names[month-1]}
                 """)
 
-            # Price per square foot estimate (rough)
             st.info(f"""
-            💡 **Insight:** Based on historical data, this {property_type_name.lower()} in {county}
-            is estimated at **£{predicted_price:,.0f}** with a confidence range of
+            💡 **Insight:** Based on the cloud-hosted ML model, this {property_type_name.lower()} in {county}
+            is estimated at **£{predicted_price:,.0f}** with a range of
             **£{lower_bound:,.0f} - £{upper_bound:,.0f}**.
             """)
 
-            # Debug information (expandable)
-            with st.expander("🔍 Technical Details"):
-                st.write("**Model Input Features:**")
-                st.dataframe(X_row, use_container_width=True)
-                st.write(f"**Log-transformed prediction:** {y_log:.4f}")
-                st.write(f"**Model:** {bundle.get('model_name', 'Unknown')}")
-                st.write(f"**Number of features:** {len(feature_names) if feature_names else 'N/A'}")
+            # Debug / API response
+            with st.expander("🔍 Technical API Details"):
+                st.write("**Raw API Response:**")
+                st.json(data)
 
         except Exception as e:
             st.error(f"❌ Prediction failed: {e}")
@@ -395,7 +315,7 @@ st.divider()
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 2rem;'>
     <p>🎓 <strong>UK Housing Price Prediction Project</strong> | Team Yunus</p>
-    <p>Model trained on 22M+ transactions from 1995-2017</p>
+    <p>Model served via Dockerized ML microservice + Go API gateway on Oracle Cloud.</p>
     <p><em>For educational purposes only. Predictions should not be used for actual property valuation.</em></p>
 </div>
 """, unsafe_allow_html=True)
