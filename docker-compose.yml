@@ -9,11 +9,13 @@ services:
     ports:
       - "5001:5000"  # External:Internal (5001 to avoid macOS AirPlay on 5000)
     volumes:
-      - ./data/clean:/app/models:ro
+      - ./data/clean:/app/data/clean:ro
+      - ./models:/app/models:ro
     environment:
       - FLASK_ENV=production
       - PORT=5000  # Internal port inside container
-      - MODEL_BASE_PATH=/app/models  # Path to mounted models directory
+      - MODEL_BASE_PATH=/app/data/clean  # Path to housing model
+      - ELECTRICITY_MODEL_PATH=/app/models/best_electricity_model_fast.pkl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s

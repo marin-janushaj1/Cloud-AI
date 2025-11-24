@@ -57,10 +57,14 @@ class ModelPredictor:
                 logger.warning(f"Housing model not found at {housing_path}")
 
             # ----- Electricity model (optional) -----
-            elec_path = self.base_path / "electricity_model.pkl"
+            # Use environment variable or fallback to default path
+            import os
+            elec_path_str = os.getenv("ELECTRICITY_MODEL_PATH", "../models/best_electricity_model_fast.pkl")
+            elec_path = Path(elec_path_str)
+
             if elec_path.exists():
                 self.electricity_model = joblib.load(elec_path)
-                logger.info("✓ Loaded electricity model")
+                logger.info(f"✓ Loaded electricity model from {elec_path}")
             else:
                 logger.warning(f"Electricity model not found at {elec_path}")
 
