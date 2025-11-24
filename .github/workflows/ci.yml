@@ -1,0 +1,139 @@
+name: CI - Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-timeout
+
+    - name: Validate model file exists
+      run: |
+        if [ ! -f "data/clean/best_model.pkl" ]; then
+          echo "❌ Model file not found!"
+          exit 1
+        fi
+        echo "✅ Model file found ($(ls -lh data/clean/best_model.pkl | awk '{print $5}'))"
+
+    - name: Test model loading
+      run: |
+        python -c "
+        import joblib
+        import sys
+        try:
+            model = joblib.load('data/clean/best_model.pkl')
+            print('✅ Model loaded successfully')
+            print(f'Model type: {type(model).__name__}')
+            sys.exit(0)
+        except Exception as e:
+            print(f'❌ Failed to load model: {e}')
+            sys.exit(1)
+        "
+
+    - name: Check Streamlit app syntax
+      run: |
+        python -m py_compile app.py
+        echo "✅ Streamlit app syntax is valid"
+
+    - name: Run ML service health check
+      working-directory: ./ml_service
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        try:
+            from predict import get_model_info
+            info = get_model_info()
+            print('✅ ML service imports successfully')
+            print(f'Available models: {list(info.keys())}')
+        except Exception as e:
+            print(f'❌ ML service import failed: {e}')
+            sys.exit(1)
+        "
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install code quality tools
+      run: |
+        pip install flake8
+
+    - name: Run flake8 (Python linting)
+      run: |
+        # Stop on critical errors, ignore line length and some warnings
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        echo "✅ No critical Python errors found"
+
+    - name: Check for TODO comments
+      run: |
+        echo "📝 Checking for TODO/FIXME comments..."
+        grep -r "TODO\|FIXME" --include="*.py" . || echo "No TODOs found"
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for exposed secrets
+      run: |
+        echo "🔒 Checking for accidentally committed secrets..."
+        if grep -r "sk-\|aws_secret\|password.*=.*['\"]" --include="*.py" --include="*.yml" .; then
+          echo "⚠️  Warning: Potential secrets found in code"
+        else
+          echo "✅ No obvious secrets detected"
+        fi
+
+  docker-build:
+    name: Test Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Test ML Service Docker build
+      run: |
+        cd ml_service
+        docker build -t ml-service:test .
+        echo "✅ ML Service Docker image builds successfully"
+
+    - name: Test Streamlit Docker build
+      run: |
+        docker build -f Dockerfile.housing -t housing-app:test .
+        echo "✅ Streamlit Docker image builds successfully"

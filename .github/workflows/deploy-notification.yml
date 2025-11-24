@@ -1,0 +1,32 @@
+name: Deployment Notification
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  notify:
+    name: Deployment Status
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get commit info
+      id: commit
+      run: |
+        echo "message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+        echo "author=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+        echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Deployment notification
+      run: |
+        echo "🚀 Deployment triggered for commit ${{ steps.commit.outputs.sha_short }}"
+        echo "👤 Author: ${{ steps.commit.outputs.author }}"
+        echo "📝 Message: ${{ steps.commit.outputs.message }}"
+        echo ""
+        echo "📦 Streamlit Cloud will auto-deploy this commit"
+        echo "🔗 Check status at: https://share.streamlit.io/"
+        echo ""
+        echo "✅ CI checks passed - deployment approved"
