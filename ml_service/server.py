@@ -128,12 +128,63 @@ def predict_electricity():
     """
     Predict UK electricity demand
 
-    TODO: Implement once electricity model is ready
+    Expected JSON body:
+    {
+        "year": 2025,
+        "month": 1,
+        "day": 15,
+        "hour": 12  // optional, defaults to 12
+    }
     """
-    return jsonify({
-        "error": "Electricity prediction not yet implemented",
-        "status": "coming_soon"
-    }), 501
+    try:
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['year', 'month', 'day']
+        missing_fields = [field for field in required_fields if field not in data]
+
+        if missing_fields:
+            return jsonify({
+                "error": f"Missing required fields: {', '.join(missing_fields)}",
+                "required_fields": required_fields
+            }), 400
+
+        # Optional hour field
+        hour = data.get('hour', 12)
+
+        # Validate ranges
+        if not (2020 <= data['year'] <= 2030):
+            return jsonify({"error": "Year must be between 2020 and 2030"}), 400
+
+        if not (1 <= data['month'] <= 12):
+            return jsonify({"error": "Month must be between 1 and 12"}), 400
+
+        if not (1 <= data['day'] <= 31):
+            return jsonify({"error": "Day must be between 1 and 31"}), 400
+
+        if not (0 <= hour <= 23):
+            return jsonify({"error": "Hour must be between 0 and 23"}), 400
+
+        # Make prediction
+        result = predictor.predict_electricity(
+            year=data['year'],
+            month=data['month'],
+            day=data['day'],
+            hour=hour
+        )
+
+        logger.info(f"Electricity prediction: {result['demand_mw']} MW at {result['datetime']}")
+        return jsonify(result), 200
+
+    except ValueError as e:
+        logger.error(f"Validation error: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}")
+        return jsonify({
+            "error": "Prediction failed",
+            "details": str(e)
+        }), 500
 
 
 @app.route('/models', methods=['GET'])

@@ -72,21 +72,21 @@ services:
       - frontend
 
   # Electricity Demand Predictor Frontend (optional)
-  # electricity-app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.electricity
-  #   container_name: electricity-app
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8502:8502"
-  #   volumes:
-  #     - ./data/clean:/app/data/clean:ro
-  #   environment:
-  #     - STREAMLIT_SERVER_PORT=8502
-  #     - STREAMLIT_SERVER_ADDRESS=0.0.0.0
-  #   networks:
-  #     - frontend
+  electricity-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.electricity
+    container_name: electricity-app
+    ports:
+      - "8502:8502"
+    volumes:
+      - ./data/clean:/app/data/clean:ro
+      - ./models:/app/models:ro
+    networks:
+      - frontend
+    depends_on:
+      - ml-service
+    restart: unless-stopped
 
   # Nginx Reverse Proxy (optional - for production)
   # nginx:

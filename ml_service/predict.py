@@ -170,25 +170,55 @@ class ModelPredictor:
             raise
 
     # ------------------------------------------------------------------
-    # Electricity prediction (placeholder)
+    # Electricity prediction
     # ------------------------------------------------------------------
-    def predict_electricity(self, features: Dict[str, Any]) -> Dict[str, Any]:
+    def predict_electricity(self, year: int, month: int, day: int, hour: int = 12) -> Dict[str, Any]:
         """
         Predict UK electricity demand
 
         Args:
-            features: Dictionary with required features for electricity model
+            year: Year (2020-2030)
+            month: Month (1-12)
+            day: Day of month (1-31)
+            hour: Hour of day (0-23), default 12
 
         Returns:
-            Dictionary with prediction
+            Dictionary with demand prediction in MW
         """
         if self.electricity_model is None:
             raise ValueError("Electricity model not loaded")
 
         try:
-            # TODO: Implement electricity prediction logic
-            # This depends on your specific electricity model
-            raise NotImplementedError("Electricity prediction not yet implemented")
+            from datetime import datetime
+
+            # Create datetime
+            dt = datetime(year, month, day, hour)
+
+            # Feature engineering (matching training features from electricity_app.py)
+            features_df = pd.DataFrame([{
+                'hour': dt.hour,
+                'day_of_week': dt.weekday(),
+                'month': dt.month,
+                'week': dt.isocalendar()[1],
+                'is_weekend': 1 if dt.weekday() >= 5 else 0,
+                # For lags, use average historical values as baseline
+                # (no recent data available in API context)
+                'lag_1': 35000,      # Typical UK demand in MW
+                'lag_24': 35000,
+                'lag_168': 35000,
+                'roll_24': 35000,
+                'roll_168': 35000
+            }])
+
+            # Make prediction
+            prediction = self.electricity_model.predict(features_df)[0]
+
+            return {
+                "demand_mw": round(float(prediction), 2),
+                "datetime": dt.isoformat(),
+                "model": "PyCaret Regression",
+                "note": "Lag features use historical averages (no recent data available)"
+            }
 
         except Exception as e:
             logger.error(f"Electricity prediction error: {e}")
